@@ -41,11 +41,12 @@ jobs:
         run: |
           docker volume create mu300-mainline
           docker run --rm -e KV="$KV" -v mu300-mainline:/src -v "$PWD/upstream":/work -v "$PWD/bbr3":/bbr3 \
-            mu300-mainline-build bash -euc '
+            mu300-mainline-build bash -euo pipefail -c '
               bash /work/build.sh
               echo "== replacing tcp_bbr.c with BBRv3 and rebuilding =="
               cp /bbr3/tcp_bbr.c /src/linux-$KV/net/ipv4/tcp_bbr.c
-              grep -c "BBR_VERSION 3" /src/linux-$KV/net/ipv4/tcp_bbr.c
+              grep -qE "BBR_VERSION[[:space:]]+3" /src/linux-$KV/net/ipv4/tcp_bbr.c || { echo "BBRv3 not in tree"; exit 1; }
+              echo "tree has BBRv3 source"
               cd /src/linux-$KV
               make O=/src/out-$KV ARCH=arm64 -j"$(nproc)" Image 2>&1 | tail -20
               strings /src/out-$KV/arch/arm64/boot/Image | grep -m1 "Linux version"
