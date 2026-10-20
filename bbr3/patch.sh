@@ -67,5 +67,13 @@ sed -i '/tp->ecn_flags |= TCP_ECN_ECT_PERMANENT;/d' "$F"
 sed -i 's#^static int bbr_fast_ack_mode#__maybe_unused static int bbr_fast_ack_mode#' "$F"
 ! grep -q 'is_acking_tlp_retrans_seq\|rs->is_ece\|fast_ack_mode = bbr_fast_ack_mode\|TCP_ECN_ECT_PERMANENT' "$F" || { echo 'patch: fast-path symbols still present' >&2; exit 1; }
 
+# 11. tcp_skb_cb.tx has no 'lost' member in 7.2; it is only printed by the WARN_ONCE
+#     diagnostic in bbr_inflight_hi_from_lost_skb, so drop the field from the format
+#     string and its argument. (the %u fragment is matched alone: step 8 already
+#     renamed rs->lost in the same format string)
+sed -i 's#tx\.lost: %u ##' "$F"
+sed -i 's#rs->prior_in_flight, TCP_SKB_CB(skb)->tx\.lost, tp->lost,#rs->prior_in_flight, tp->lost,#' "$F"
+! grep -q 'tx\.lost' "$F" || { echo 'patch: tx.lost still present' >&2; exit 1; }
+
 echo "patch: adapted $F to the 7.2 tcp_congestion_ops API"
 sed -n '/static struct tcp_congestion_ops tcp_bbr_cong_ops/,/^};/p' "$F"
