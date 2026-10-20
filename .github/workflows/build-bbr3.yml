@@ -37,18 +37,17 @@ jobs:
           grep -qE '\.name[[:space:]]*=[[:space:]]*"bbr"' bbr3/tcp_bbr.c || { echo 'unexpected registration name'; exit 1; }
           echo "BBRv3 source: $(wc -l < bbr3/tcp_bbr.c) lines, KV=$KV"
 
-      - name: Build kernel (BBRv3 replaces net/ipv4/tcp_bbr.c before make)
+      - name: Build kernel (BBRv3 replaces net/ipv4/tcp_bbr.c, adapted to 7.2 API)
         run: |
           docker volume create mu300-mainline
           docker run --rm -e KV="$KV" -v mu300-mainline:/src -v "$PWD/upstream":/work -v "$PWD/bbr3":/bbr3 \
             mu300-mainline-build bash -euo pipefail -c '
               bash /work/build.sh
-              echo "== replacing tcp_bbr.c with BBRv3 and rebuilding =="
+              echo "== replacing tcp_bbr.c with BBRv3 and adapting to the 7.2 API =="
               cp /bbr3/tcp_bbr.c /src/linux-$KV/net/ipv4/tcp_bbr.c
-              grep -qE "BBR_VERSION[[:space:]]+3" /src/linux-$KV/net/ipv4/tcp_bbr.c || { echo "BBRv3 not in tree"; exit 1; }
-              echo "tree has BBRv3 source"
+              bash /bbr3/patch.sh /src/linux-$KV
               cd /src/linux-$KV
-              make O=/src/out-$KV ARCH=arm64 -j"$(nproc)" Image 2>&1 | tail -20
+              make O=/src/out-$KV ARCH=arm64 -j"$(nproc)" Image 2>&1 | tail -30
               strings /src/out-$KV/arch/arm64/boot/Image | grep -m1 "Linux version"
               cp /src/out-$KV/arch/arm64/boot/Image /work/out/Image
             '
