@@ -30,5 +30,13 @@ awk '/^static size_t bbr_get_info\(/{skip=1} skip&&/^}/{skip=0; next} !skip' "$F
 sed -i '/\.get_info[[:space:]]*=[[:space:]]*bbr_get_info,/d' "$F"
 ! grep -q 'bbr_get_info' "$F" || { echo 'patch: bbr_get_info still present' >&2; exit 1; }
 
+# 5. bbr_get_phase() only served bbr_get_info() and references BBR_PHASE_PROBE_BW_REFILL,
+#    which 7.2's enum tcp_bbr_phase does not have.
+awk '/^static enum tcp_bbr_phase bbr_get_phase\(/{skip=1} skip&&/^}/{skip=0; next} !skip' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
+! grep -q 'bbr_get_phase' "$F" || { echo 'patch: bbr_get_phase still present' >&2; exit 1; }
+
+# 6. bbr_bw_bytes_per_sec() was only used by bbr_get_info(); keep it but silence -Wunused
+sed -i 's#^static u64 bbr_bw_bytes_per_sec#__maybe_unused static u64 bbr_bw_bytes_per_sec#' "$F"
+
 echo "patch: adapted $F to the 7.2 tcp_congestion_ops API"
 sed -n '/static struct tcp_congestion_ops tcp_bbr_cong_ops/,/^};/p' "$F"
