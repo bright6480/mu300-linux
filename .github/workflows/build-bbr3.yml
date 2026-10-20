@@ -53,7 +53,9 @@ jobs:
               python3 gen_kconfig.py /src/linux-$KV kernel_config.h gcc kapi_checklist -j "$(nproc)" -a arm64
               echo "--- HAVE_ macros ---"
               grep -c "define HAVE_" kernel_config.h
-              make -C /src/linux-$KV M=/bbr3mod ARCH=arm64 modules 2>&1 | tail -15
+              # build.sh only built Image (no Module.symvers); downgrade modpost
+              # to warnings - runtime resolution stays with the kernel.
+              make -C /src/linux-$KV M=/bbr3mod ARCH=arm64 KBUILD_MODPOST_WARN=1 modules 2>&1 | tail -15
               ls -la tcp_bbr3.ko
               echo -n "vermagic: "; strings tcp_bbr3.ko | grep -m1 vermagic
             '
