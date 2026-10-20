@@ -55,5 +55,17 @@ sed -i '/tlp_orig_data_app_limited/d' "$F"
 # 9. bbr_inflight_hi_from_lost_skb() was only called by the removed callback
 sed -i 's#^static u32 bbr_inflight_hi_from_lost_skb#__maybe_unused static u32 bbr_inflight_hi_from_lost_skb#' "$F"
 
+# 10. fast-path signals that 7.2 removed
+#     rate_sample.is_acking_tlp_retrans_seq (TLP bookkeeping gone) -> keep the plain condition
+sed -i 's#if (bbr->loss_round_start \&\& !rs->is_acking_tlp_retrans_seq) {#if (bbr->loss_round_start) {#' "$F"
+#     rate_sample.is_ece -> delivered_ce counts the CE marks in this sample
+sed -i 's#rs->is_ece#(rs->delivered_ce > 0)#' "$F"
+#     tcp_sock.fast_ack_mode and TCP_ECN_ECT_PERMANENT are gone
+sed -i '/tp->fast_ack_mode = bbr_fast_ack_mode ? 1 : 0;/d' "$F"
+sed -i '/^[[:space:]]*if (bbr_can_use_ecn(sk))$/d' "$F"
+sed -i '/tp->ecn_flags |= TCP_ECN_ECT_PERMANENT;/d' "$F"
+sed -i 's#^static int bbr_fast_ack_mode#__maybe_unused static int bbr_fast_ack_mode#' "$F"
+! grep -q 'is_acking_tlp_retrans_seq\|rs->is_ece\|fast_ack_mode = bbr_fast_ack_mode\|TCP_ECN_ECT_PERMANENT' "$F" || { echo 'patch: fast-path symbols still present' >&2; exit 1; }
+
 echo "patch: adapted $F to the 7.2 tcp_congestion_ops API"
 sed -n '/static struct tcp_congestion_ops tcp_bbr_cong_ops/,/^};/p' "$F"
