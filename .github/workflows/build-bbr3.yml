@@ -36,20 +36,26 @@ jobs:
           docker run --rm -e KV="$KV" -v mu300-mainline:/src -v "$PWD/upstream":/work \
             mu300-mainline-build bash /work/build.sh
 
-      - name: Probe API and build tcp_bbr3.ko
+      - name: Prepare source tree in-tree, probe API, build tcp_bbr3.ko
         run: |
           git clone --depth 1 https://github.com/hrimfaxi/tcp_bbr_modules bbr3mod
           docker run --rm -e KV="$KV" -v mu300-mainline:/src -v "$PWD/upstream":/work -v "$PWD/bbr3mod":/bbr3mod \
             mu300-mainline-build bash -euo pipefail -c '
+              # gen_kconfig.py probes with "make -C \$KDIR M=... modules" and no O=,
+              # which needs an in-tree prepared source root (build.sh used O= out-of-tree).
+              cd /src/linux-$KV
+              cp /src/out-$KV/.config .
+              make ARCH=arm64 modules_prepare > /tmp/prepare.log 2>&1 || { tail -30 /tmp/prepare.log; exit 1; }
+              echo "source tree prepared in-tree"
               cd /bbr3mod
               make distclean >/dev/null 2>&1 || true
               rm -f kernel_config.h
               python3 gen_kconfig.py /src/linux-$KV kernel_config.h gcc kapi_checklist -j "$(nproc)" -a arm64
               echo "--- HAVE_ macros ---"
               grep -c "define HAVE_" kernel_config.h
-              make -C /src/linux-$KV O=/src/out-$KV M=/bbr3mod ARCH=arm64 modules 2>&1 | tail -15
+              make -C /src/linux-$KV M=/bbr3mod ARCH=arm64 modules 2>&1 | tail -15
               ls -la tcp_bbr3.ko
-              strings tcp_bbr3.ko | grep -m1 vermagic
+              echo -n "vermagic: "; strings tcp_bbr3.ko | grep -m1 vermagic
             '
 
       - name: Audit undefined symbols
