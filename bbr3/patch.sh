@@ -22,5 +22,13 @@ sed -i '/\.skb_marked_lost[[:space:]]*=[[:space:]]*bbr_skb_marked_lost,/d' "$F"
 sed -i 's#TCP_CONG_NON_RESTRICTED | TCP_CONG_WANTS_CE_EVENTS#TCP_CONG_NON_RESTRICTED#' "$F"
 ! grep -q 'TCP_CONG_WANTS_CE_EVENTS' "$F" || { echo 'patch: CE events flag still present' >&2; exit 1; }
 
+# 4. 7.2's struct tcp_bbr_info dropped bbr_mode/bbr_phase/bbr_version/
+#    bbr_inflight_lo/bbr_inflight_hi/bbr_extra_acked, so bbr_get_info() no longer
+#    compiles. It only fills the INET_DIAG_BBRINFO sockopt for `ss -i`; the
+#    congestion control itself does not use it, so the callback is dropped.
+awk '/^static size_t bbr_get_info\(/{skip=1} skip&&/^}/{skip=0; next} !skip' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
+sed -i '/\.get_info[[:space:]]*=[[:space:]]*bbr_get_info,/d' "$F"
+! grep -q 'bbr_get_info' "$F" || { echo 'patch: bbr_get_info still present' >&2; exit 1; }
+
 echo "patch: adapted $F to the 7.2 tcp_congestion_ops API"
 sed -n '/static struct tcp_congestion_ops tcp_bbr_cong_ops/,/^};/p' "$F"
