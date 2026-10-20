@@ -33,8 +33,8 @@ jobs:
         run: |
           mkdir -p bbr3
           curl -fsSL https://raw.githubusercontent.com/google/bbr/v3/net/ipv4/tcp_bbr.c -o bbr3/tcp_bbr.c
-          grep -q 'BBR_VERSION 3' bbr3/tcp_bbr.c || { echo 'not BBRv3 source'; exit 1; }
-          grep -q '\.name.*=.*"bbr"' bbr3/tcp_bbr.c || { echo 'unexpected registration name'; exit 1; }
+          grep -qE 'BBR_VERSION[[:space:]]+3' bbr3/tcp_bbr.c || { echo 'not BBRv3 source'; exit 1; }
+          grep -qE '\.name[[:space:]]*=[[:space:]]*"bbr"' bbr3/tcp_bbr.c || { echo 'unexpected registration name'; exit 1; }
           echo "BBRv3 source: $(wc -l < bbr3/tcp_bbr.c) lines, KV=$KV"
 
       - name: Build kernel (BBRv3 replaces net/ipv4/tcp_bbr.c before make)
