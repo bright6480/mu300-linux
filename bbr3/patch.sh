@@ -75,5 +75,39 @@ sed -i 's#tx\.lost: %u ##' "$F"
 sed -i 's#rs->prior_in_flight, TCP_SKB_CB(skb)->tx\.lost, tp->lost,#rs->prior_in_flight, tp->lost,#' "$F"
 ! grep -q 'tx\.lost' "$F" || { echo 'patch: tx.lost still present' >&2; exit 1; }
 
+# 12. tcp_skb_tx_in_flight_is_suspicious() no longer exists in 7.2; use the plain
+#     condition. And bbr_run_loss_probe_recovery() lost its last use of tp.
+python3 - "$F" <<'PYEOF'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+
+old = '''\t\tWARN_ONCE(tcp_skb_tx_in_flight_is_suspicious(
+\t\t\t\t  pcount,
+\t\t\t\t  TCP_SKB_CB(skb)->sacked,
+\t\t\t\t  rs->prior_in_flight),
+\t\t\t  "tx_in_flight: %u pcount: %u reneg: %u",
+\t\t\t  rs->prior_in_flight, pcount, tcp_sk(sk)->is_sack_reneg);'''
+new = '''\t\tWARN_ONCE(inflight_prev < 0,
+\t\t\t  "tx_in_flight: %u pcount: %u reneg: %u",
+\t\t\t  rs->prior_in_flight, pcount, tcp_sk(sk)->is_sack_reneg);'''
+assert old in s, 'WARN_ONCE block not found'
+s = s.replace(old, new)
+
+old2 = '''static void bbr_run_loss_probe_recovery(struct sock *sk)
+{
+\tstruct tcp_sock *tp = tcp_sk(sk);
+\tstruct bbr *bbr = inet_csk_ca(sk);'''
+new2 = '''static void bbr_run_loss_probe_recovery(struct sock *sk)
+{
+\tstruct bbr *bbr = inet_csk_ca(sk);'''
+assert old2 in s, 'bbr_run_loss_probe_recovery not found'
+s = s.replace(old2, new2)
+
+open(p, 'w').write(s)
+print('patch: WARN_ONCE + unused tp fixed')
+PYEOF
+! grep -q 'tcp_skb_tx_in_flight_is_suspicious' "$F" || { echo 'patch: helper still present' >&2; exit 1; }
+
 echo "patch: adapted $F to the 7.2 tcp_congestion_ops API"
 sed -n '/static struct tcp_congestion_ops tcp_bbr_cong_ops/,/^};/p' "$F"
