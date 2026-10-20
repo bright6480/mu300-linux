@@ -38,5 +38,22 @@ awk '/^static enum tcp_bbr_phase bbr_get_phase\(/{skip=1} skip&&/^}/{skip=0; nex
 # 6. bbr_bw_bytes_per_sec() was only used by bbr_get_info(); keep it but silence -Wunused
 sed -i 's#^static u64 bbr_bw_bytes_per_sec#__maybe_unused static u64 bbr_bw_bytes_per_sec#' "$F"
 
+# 7. 7.2 removed the skb_marked_lost callback; its body reads tcp_skb_cb members that
+#    also moved (scb->tx.delivered_mstamp/in_flight/lost/is_app_limited) and
+#    rate_sample.tx_in_flight/lost. Drop the function, its ops entry and its BTF id.
+awk '/^__bpf_kfunc static void bbr_skb_marked_lost\(/{skip=1} skip&&/^}/{skip=0; next} !skip' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
+sed -i '/BTF_ID_FLAGS(func, bbr_skb_marked_lost)/d' "$F"
+! grep -q 'bbr_skb_marked_lost' "$F" || { echo 'patch: bbr_skb_marked_lost still present' >&2; exit 1; }
+
+# 8. rate_sample field renames in 7.2: lost -> losses, tx_in_flight -> prior_in_flight
+sed -i 's/rs->tx_in_flight/rs->prior_in_flight/g; s/rs\.tx_in_flight/rs.prior_in_flight/g' "$F"
+sed -i 's/rs->lost/rs->losses/g; s/rs\.lost/rs.losses/g' "$F"
+# tcp_sock.tlp_orig_data_app_limited is gone; app_limited defaults to false there
+sed -i '/tlp_orig_data_app_limited/d' "$F"
+! grep -q 'tlp_orig_data_app_limited' "$F" || { echo 'patch: tlp field still present' >&2; exit 1; }
+
+# 9. bbr_inflight_hi_from_lost_skb() was only called by the removed callback
+sed -i 's#^static u32 bbr_inflight_hi_from_lost_skb#__maybe_unused static u32 bbr_inflight_hi_from_lost_skb#' "$F"
+
 echo "patch: adapted $F to the 7.2 tcp_congestion_ops API"
 sed -n '/static struct tcp_congestion_ops tcp_bbr_cong_ops/,/^};/p' "$F"
