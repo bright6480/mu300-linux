@@ -57,7 +57,8 @@ jobs:
               # to warnings - runtime resolution stays with the kernel.
               make -C /src/linux-$KV M=/bbr3mod ARCH=arm64 KBUILD_MODPOST_WARN=1 modules 2>&1 | tail -15
               ls -la tcp_bbr3.ko
-              echo -n "vermagic: "; strings tcp_bbr3.ko | grep -m1 vermagic
+              echo -n "vermagic: "; strings tcp_bbr3.ko | grep vermagic | head -1 || true
+              mkdir -p /work/out && cp tcp_bbr3.ko kernel_config.h /work/out/
             '
 
       - name: Audit undefined symbols
